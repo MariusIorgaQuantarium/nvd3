@@ -16,7 +16,10 @@ nv.models.line = function() {
         , color = nv.utils.defaultColor() // a function that returns a color
         , getX = function(d) { return d.x } // accessor to get the x value from a data point
         , getY = function(d) { return d.y } // accessor to get the y value from a data point
+        , getY0 = function(d) { return d.y0 !== undefined ? d.y0  : d.y} // accessor to get the y value from a data point
+        , getY1 = function(d) { return d.y1 } // accessor to get the y value from a data point
         , defined = function(d,i) { return !isNaN(getY(d,i)) && getY(d,i) !== null } // allows a line to be not continuous when it is not defined
+        , isAreDefined = function(d,i) { return !isNaN(getY1(d,i)) && getY1(d,i) !== null } // allows a line to be not continuous when it is not defined
         , isArea = function(d) { return d.area } // decides if a line is an area or just a line
         , clipEdge = false // if true, masks lines within x and y scale
         , x //can be accessed via chart.xScale()
@@ -48,7 +51,29 @@ nv.models.line = function() {
     function chart(selection) {
         renderWatch.reset();
         renderWatch.models(scatter);
-        selection.each(function(data) {
+        selection.each(function(unparsedData) {
+            // ! if the data contains an area line that also has y0 and y1 values, duplicate the line and remove the area
+            // ! this is done to create a separate line for y0 that also has the scatter points
+            var data = unparsedData.reduce(function(acc,item, index){
+                var values = item.values;
+                if(item.area &&  values[0].y0 !== undefined && values[0].y1 !== undefined){
+                    acc.push(Object.assign(JSON.parse(JSON.stringify(item)), {
+                        area: false,
+                        key: item.key + '___________2',
+                        values: values.map(function(value){
+                            return {
+                                series: value.series,
+                                // ! remove y0 and y1
+                                x: value.x,
+                                y: value.y0
+                            }
+                        })
+                    }));
+                }
+
+                return acc
+            }, unparsedData)
+
             container = d3.select(this);
             var availableWidth = nv.utils.availableWidth(width, container, margin),
                 availableHeight = nv.utils.availableHeight(height, container, margin);
@@ -121,8 +146,8 @@ nv.models.line = function() {
                         .interpolate(interpolate)
                         .defined(defined)
                         .x(function(d,i) { return nv.utils.NaNtoZero(x0(getX(d,i))) })
-                        .y0(function(d,i) { return nv.utils.NaNtoZero(y0(getY(d,i))) })
-                        .y1(function(d,i) { return y0( y.domain()[0] <= 0 ? y.domain()[1] >= 0 ? 0 : y.domain()[1] : y.domain()[0] ) })
+                        .y0(function(d,i) { return nv.utils.NaNtoZero(y0(getY0(d,i))) })
+                        .y1(function(d,i) { return getY1(d,i) !== undefined ? y(getY1(d,i)) : y0( y.domain()[0] <= 0 ? y.domain()[1] >= 0 ? 0 : y.domain()[1] : y.domain()[0] ) })
                         //.y1(function(d,i) { return y0(0) }) //assuming 0 is within y domain.. may need to tweak this
                         .apply(this, [d.values])
                 });
@@ -135,13 +160,14 @@ nv.models.line = function() {
                         .interpolate(interpolate)
                         .defined(defined)
                         .x(function(d,i) { return nv.utils.NaNtoZero(x(getX(d,i))) })
-                        .y0(function(d,i) { return nv.utils.NaNtoZero(y(getY(d,i))) })
-                        .y1(function(d,i) { return y( y.domain()[0] <= 0 ? y.domain()[1] >= 0 ? 0 : y.domain()[1] : y.domain()[0] ) })
+                        .y0(function(d,i) { return nv.utils.NaNtoZero(y(getY0(d,i))) })
+                        // .y1(function(d,i) { return y( y.domain()[0] <= 0 ? y.domain()[1] >= 0 ? 0 : y.domain()[1] : y.domain()[0] ) })
+                        .y1(function(d,i) { return getY1(d,i) !== undefined ? y(getY1(d,i)) : y0( y.domain()[0] <= 0 ? y.domain()[1] >= 0 ? 0 : y.domain()[1] : y.domain()[0] ) })
                         //.y1(function(d,i) { return y0(0) }) //assuming 0 is within y domain.. may need to tweak this
                         .apply(this, [d.values])
                 });
 
-            var linePaths = groups.selectAll('path.nv-line')
+                var linePaths = groups.selectAll('path.nv-line')
                 .data(function(d) { return [d.values] });
 
             linePaths.enter().append('path')

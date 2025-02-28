@@ -15,6 +15,8 @@ nv.models.multiChart = function() {
         yDomain2,
         getX = function(d) { return d.x },
         getY = function(d) { return d.y},
+        getY0 = function(d) { return d.y0},
+        getY1 = function(d) { return d.y1},
         interpolate = 'monotone',
         useVoronoi = true,
         interactiveLayer = nv.interactiveGuideline(),
@@ -84,14 +86,14 @@ nv.models.multiChart = function() {
             var series1 = data.filter(function(d) {return !d.disabled && d.yAxis == 1})
                 .map(function(d) {
                     return d.values.map(function(d,i) {
-                        return { x: getX(d), y: getY(d) }
+                        return { x: getX(d), y: getY(d), y0: getY0(d), y1: getY1(d) }
                     })
                 });
 
             var series2 = data.filter(function(d) {return !d.disabled && d.yAxis == 2})
                 .map(function(d) {
                     return d.values.map(function(d,i) {
-                        return { x: getX(d), y: getY(d) }
+                        return { x: getX(d), y: getY(d), y0: getY0(d), y1: getY1(d) }
                     })
                 });
 
@@ -206,10 +208,10 @@ nv.models.multiChart = function() {
                 return a.map(function(aVal,i){return {x: aVal.x, y: aVal.y + b[i].y}})
             }).concat([{x:0, y:0}]) : [];
 
-            yScale1 .domain(yDomain1 || d3.extent(d3.merge(series1).concat(extraValue1), function(d) { return d.y } ))
+            yScale1 .domain(yDomain1 || d3.extent(d3.merge(d3.merge(series1).concat(extraValue1).map(function(d){ return [d.y, d.y0, d.y1] })).filter(function(d) {return !isNaN(d)})))
                 .range([0, availableHeight]);
 
-            yScale2 .domain(yDomain2 || d3.extent(d3.merge(series2).concat(extraValue2), function(d) { return d.y } ))
+            yScale2 .domain(yDomain2 || d3.extent(d3.merge(d3.merge(series2).concat(extraValue2).map(function(d){ return [d.y, d.y0, d.y1] })).filter(function(d) {return !isNaN(d)})))
                 .range([0, availableHeight]);
 
             lines1.yDomain(yScale1.domain());
